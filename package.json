@@ -17,6 +17,8 @@
     "typescript": "^5.5.4"
   },
   "dependencies": {
-    "@hapi/hapi": "^21.3.10"
+    "@hapi/hapi": "^21.3.10",
+    "@types/uuid": "^10.0.0",
+    "uuid": "^11.1.0"
   }
 }
