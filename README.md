@@ -1,22 +1,14 @@
 # El Dorado Failure Resiliance Backend
 This project uses Make as task administrator.
 
-# Installing
-```bash
-make install
-```
+## Requirements
+- Node v18 or above
+- Docker
 
-# Run Database
+## Setup and run
 ```bash
-make setup-db
-```
-
-# Setup Database
-```bash
-make setup-db
-```
-
-# Running Tests
-```bash
-make tests-run
+1. make install
+2. make postgres-run
+3. make setup-db
+4. make tests-run
 ```
