@@ -1,11 +1,24 @@
 import { Server } from "@hapi/hapi"
 import { createItemId } from "./utils"
+import * as dotenv from 'dotenv';
+import { Pool } from "pg";
+
+dotenv.config();
+
+// Database. Move to its own file
+const pool = new Pool({
+    user:  process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+});
 
 // Item model.
 interface Item {
-    id: Number,
-    name: String,
-    price: Number
+    id: number,
+    name: string,
+    price: number
 }
 
 interface ErrorStructure {
@@ -14,14 +27,48 @@ interface ErrorStructure {
 }
 
 // ToDo: In-memory database. Replace by a persistent database.
-// const inMemoryDb = new Map<number, Item>()
 let inMemoryDb: Array<Item> = []
 
-async function getItemById(id: number) {
-    return inMemoryDb.find(item => item.id === Number(id));
+async function insertItem(item: Item): Promise<Item | undefined> {
+    inMemoryDb.push(item);
+    const query = `INSERT INTO products (id, name, price)
+        VALUES ($1, $2, $3) RETURNING *;`;
+    const values = [item.id, item.name, item.price];
+    try {
+        console.log("item.id:", item.id)
+        const res = await pool.query(query, values);
+        console.log("Inserted item ID:", res.rows[0].id)
+        return res.rows[0].id;
+    } catch (err) {
+        console.error("DB insert error:", err);
+        return undefined;
+    }
 }
 
-async function updateItemById(id: number, updatedData: Partial<Item>) {
+async function getItemById(id: number): Promise<Item | undefined> {
+    // console.log("find id:", id);
+    const itemM = inMemoryDb.find(item => item.id === Number(id));
+    // console.log("itemM id:", itemM?.id);
+    const query = `SELECT * FROM products WHERE id = $1`;
+    try {
+        const result = await pool.query(query, [id]);
+        if (result.rows.length === 0) {
+            return undefined;
+        }
+        const item: Item = {
+            id: result.rows[0].id,
+            name: result.rows[0].name,
+            price: Number(result.rows[0].price)
+        };
+        // console.log("db item id:", item.id);
+        return item;
+    } catch (err) {
+        console.error("DB select error:", err);
+        return undefined;
+    }
+}
+
+async function updateItemById(id: number, updatedData: Partial<Item>): Promise<Item | undefined> {
     const itemIndex = inMemoryDb.findIndex(item => item.id === Number(id));
     if (itemIndex === -1) {
         return;
@@ -30,6 +77,14 @@ async function updateItemById(id: number, updatedData: Partial<Item>) {
         ...inMemoryDb[itemIndex],
         ...updatedData
     };
+    // Persist update.
+    const query = `UPDATE products SET name = $1, price = $2 WHERE id = $3 RETURNING *;`;
+    const values = [inMemoryDb[itemIndex].name, inMemoryDb[itemIndex].price, id];
+    try {
+        await pool.query(query, values);
+    } catch (err) {
+        console.error("DB update error:", err);
+    }
     return inMemoryDb[itemIndex];
 }
 
@@ -39,6 +94,15 @@ async function deleteItemById(id: number) {
         return null;
     }
     const [deletedItem] = inMemoryDb.splice(itemIndex, 1);
+    // Persist delete.
+    const query = `DELETE FROM products WHERE id = $1 RETURNING *;`;
+    const values = [id];
+    try {
+        await pool.query(query, values);
+    }
+    catch (err) {
+        console.error("DB delete error:", err);
+    }
     return deletedItem;
 }
 
@@ -103,7 +167,7 @@ export const defineRoutes = (server: Server) => {
                 name: name,
                 price: Number(price)
             };
-            inMemoryDb.push(item);
+            await insertItem(item);
             return h.response(item).code(201);
         }
     })

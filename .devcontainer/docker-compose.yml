@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17.4
+    restart: always
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpass1
+    ports:
+      - "5432:5432" # Exposes PostgreSQL. Remove for production.
+    networks:
+      - el-dorado-network
+
+networks:
+  el-dorado-network:
+    driver: bridge

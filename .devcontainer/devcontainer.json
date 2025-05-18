@@ -4,5 +4,5 @@
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
-  "remoteUser": "node"
+	"remoteUser": "node"
 }
