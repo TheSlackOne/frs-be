@@ -2,7 +2,9 @@ import { Server } from "@hapi/hapi"
 import { createItemId } from "./utils"
 import * as dotenv from 'dotenv';
 import { Pool } from "pg";
+import { PrismaClient } from '../generated/prisma';
 
+const prisma = new PrismaClient();
 dotenv.config();
 
 // Database. Move to its own file
@@ -27,96 +29,102 @@ interface ErrorStructure {
 }
 
 async function insertItem(item: Item): Promise<Item | undefined> {
-    const query = `INSERT INTO products (id, name, price)
-        VALUES ($1, $2, $3) RETURNING *;`;
-    const values = [item.id, item.name, item.price];
     try {
-        console.log("item.id:", item.id)
-        const res = await pool.query(query, values);
-        console.log("Inserted item ID:", res.rows[0].id)
-        return res.rows[0].id;
+        const created = await prisma.products.create({
+            data: {
+                id: item.id,
+                name: item.name,
+                price: item.price,
+            },
+        });
+        const newItem: Item = {
+            id: created.id,
+            name: created.name,
+            price: Number(created.price)
+        };
+        return newItem;
     } catch (err) {
-        console.error("DB insert error:", err);
+        console.error("Prisma insert error:", err);
         return undefined;
     }
 }
 
 async function getItemById(id: number): Promise<Item | undefined> {
-    const query = `SELECT * FROM products WHERE id = $1`;
     try {
-        const result = await pool.query(query, [id]);
-        if (result.rows.length === 0) {
+        const result = await prisma.products.findUnique({
+            where: { id: Number(id) },
+        });
+        if (!result) {
             return undefined;
         }
         const item: Item = {
-            id: result.rows[0].id,
-            name: result.rows[0].name,
-            price: Number(result.rows[0].price)
+            id: result.id,
+            name: result.name,
+            price: Number(result.price)
         };
         return item;
     } catch (err) {
-        console.error("DB select error:", err);
+        console.error("Prisma select error:", err);
         return undefined;
     }
 }
 
 async function updateItemById(id: number, updatedData: Partial<Item>): Promise<Item | undefined> {
-    const query = `UPDATE products SET name = $1, price = $2 WHERE id = $3 RETURNING *;`;
-    const values = [updatedData.name, updatedData.price, id];
     try {
-        const result = await pool.query(query, values);
-        if (result.rows.length === 0) {
+        const updated = await prisma.products.update({
+            where: { id: Number(id) },
+            data: {
+                name: updatedData.name,
+                price: updatedData.price,
+            },
+        });
+        if (!updated) {
             return undefined;
         }
         const item: Item = {
-            id: result.rows[0].id,
-            name: result.rows[0].name,
-            price: Number(result.rows[0].price)
+            id: updated.id,
+            name: updated.name,
+            price: Number(updated.price)
         };
         return item;
     } catch (err) {
-        console.error("DB update error:", err);
+        console.error("Prisma update error:", err);
         return undefined;
     }
 }
 
 async function deleteItemById(id: number): Promise<Item | undefined> {
-    const query = `DELETE FROM products WHERE id = $1 RETURNING *;`;
-    const values = [id];
     try {
-        const result = await pool.query(query, values);
-        if (result.rows.length === 0) {
+        const deleted = await prisma.products.delete({
+            where: { id: Number(id) },
+        });
+        if (!deleted) {
             return undefined;
         }
         const item: Item = {
-            id: result.rows[0].id,
-            name: result.rows[0].name,
-            price: Number(result.rows[0].price)
+            id: deleted.id,
+            name: deleted.name,
+            price: Number(deleted.price)
         };
         return item;
-    }
-    catch (err) {
-        console.error("DB delete error:", err);
-        return undefined
+    } catch (err) {
+        console.error("Prisma delete error:", err);
+        return undefined;
     }
 }
 
 async function getAllItems(): Promise<Array<Item>>{
-    const query = `SELECT * FROM products`;
     try {
-        const result = await pool.query(query);
-        if (result.rows.length === 0) {
-            return [];
-        }
-        const items: Array<Item> = result.rows.map((row: any) => ({
+        const queryResult = await prisma.products.findMany();
+        console.log("queryResult:", queryResult);
+        return queryResult.map((row) => ({
             id: row.id,
             name: row.name,
             price: Number(row.price)
         }));
-        return items;
     } catch (err) {
-        console.error("DB select error:", err);
-        return [];
+        console.error("Prisma error:", err);
+        throw err;
     }
 }
 

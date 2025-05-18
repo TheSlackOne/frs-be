@@ -15,6 +15,9 @@ postgres-setup-db: postgres-create-db postgres-create-table
 postgres-create-db:
 	docker exec -it postgres psql -U postgres -c 'create database eldorado;'
 
+postgres-migrate:
+	npx prisma migrate dev --name mymigration
+
 postgres-create-table:
 	docker exec -it postgres psql -U postgres -d eldorado -c \
 	"CREATE TABLE products( \
