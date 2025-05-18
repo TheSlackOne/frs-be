@@ -13,6 +13,19 @@ services:
     networks:
       - el-dorado-network
 
+  frs-be:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: eldorado-frs-be
+    container_name: eldorado-frs-be
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    networks:
+      - el-dorado-network
+
 networks:
   el-dorado-network:
     driver: bridge

@@ -1,33 +1,30 @@
-postgres-run:
-	docker-compose -f .devcontainer/docker-compose.yml up -d
+install:
+	npm install
 
-postgres-stop:
-	docker-compose -f .devcontainer/docker-compose.yml stop
+setup-db: postgres-start
+	@until docker exec postgres pg_isready -U postgres; do sleep 1; done
+	docker exec -it postgres psql -U postgres -c 'create database eldorado;'
+	npm run prisma:generate
+	npm run prisma:migrate
 
-postgres-down:
-	docker-compose -f .devcontainer/docker-compose.yml down
+tests-run:
+	docker exec -it postgres psql -U postgres -d eldorado -c 'DELETE FROM products;'
+	npm run test
+
+system-run:
+	docker-compose up -d
+
+system-stop:
+	docker-compose stop
+
+system-down:
+	docker-compose down
+
+postgres-start:
+	docker-compose up -d postgres
 
 postgres-log:
-	docker-compose -f .devcontainer/docker-compose.yml logs -f
-
-postgres-setup-db: postgres-create-db postgres-create-table
-
-postgres-create-db:
-	docker exec -it postgres psql -U postgres -c 'create database eldorado;'
-
-postgres-migrate:
-	npx prisma migrate dev --name mymigration
-
-postgres-create-table:
-	docker exec -it postgres psql -U postgres -d eldorado -c \
-	"CREATE TABLE products( \
-		id SERIAL PRIMARY KEY, \
-		name VARCHAR(200) NOT NULL, \
-		price NUMERIC(10) NOT NULL, \
-		quantity INT NULL, \
-		description VARCHAR(1000) NULL, \
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP \
-	);"
+	docker-compose logs -f postgres
 
 postgres-drop-table:
 	docker exec -it postgres psql -U postgres -d eldorado -c \
@@ -35,3 +32,10 @@ postgres-drop-table:
 
 postgres-ssh:
 	docker exec -it postgres bash
+
+eldorado-be-build:
+	docker build -t eldorado-frs-be .
+
+eldorado-be-run:
+	docker rm -f eldorado-frs-be && \
+	docker run --name eldorado-frs-be --network=host eldorado-frs-be

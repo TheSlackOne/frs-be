@@ -1,226 +1,35 @@
-import { Server } from "@hapi/hapi"
-import { createItemId } from "./utils"
-import * as dotenv from 'dotenv';
-import { PrismaClient } from '../generated/prisma';
-import { Item, ErrorStructure } from './models'
-import { ItemSchema } from '../schemas/item.schema';
-
-const prisma = new PrismaClient();
-dotenv.config();
-
-async function insertItem(item: Item): Promise<Item | undefined> {
-    try {
-        const created = await prisma.products.create({
-            data: {
-                id: item.id,
-                name: item.name,
-                price: item.price,
-            },
-        });
-        const newItem: Item = {
-            id: created.id,
-            name: created.name,
-            price: Number(created.price)
-        };
-        return newItem;
-    } catch (err) {
-        console.error("Prisma insert error:", err);
-        return undefined;
-    }
-}
-
-async function getItemById(id: number): Promise<Item | undefined> {
-    try {
-        const result = await prisma.products.findUnique({
-            where: { id: Number(id) },
-        });
-        if (!result) {
-            return undefined;
-        }
-        const item: Item = {
-            id: result.id,
-            name: result.name,
-            price: Number(result.price)
-        };
-        return item;
-    } catch (err) {
-        console.error("Prisma select error:", err);
-        return undefined;
-    }
-}
-
-async function updateItemById(id: number, updatedData: Partial<Item>): Promise<Item | undefined> {
-    try {
-        const updated = await prisma.products.update({
-            where: { id: Number(id) },
-            data: {
-                name: updatedData.name,
-                price: updatedData.price,
-            },
-        });
-        if (!updated) {
-            return undefined;
-        }
-        const item: Item = {
-            id: updated.id,
-            name: updated.name,
-            price: Number(updated.price)
-        };
-        return item;
-    } catch (err) {
-        console.error("Prisma update error:", err);
-        return undefined;
-    }
-}
-
-async function deleteItemById(id: number): Promise<Item | undefined> {
-    try {
-        const deleted = await prisma.products.delete({
-            where: { id: Number(id) },
-        });
-        if (!deleted) {
-            return undefined;
-        }
-        const item: Item = {
-            id: deleted.id,
-            name: deleted.name,
-            price: Number(deleted.price)
-        };
-        return item;
-    } catch (err) {
-        console.error("Prisma delete error:", err);
-        return undefined;
-    }
-}
-
-async function getAllItems(): Promise<Array<Item>>{
-    try {
-        const queryResult = await prisma.products.findMany();
-        return queryResult.map((row) => ({
-            id: row.id,
-            name: row.name,
-            price: Number(row.price)
-        }));
-    } catch (err) {
-        console.error("Prisma error:", err);
-        throw err;
-    }
-}
-
-// Schemas can be implemented, like Zod.
+import { Server } from "@hapi/hapi";
+import * as ItemController from './item.controller';
 
 export const defineRoutes = (server: Server) => {
     server.route({
         method: 'GET',
         path: '/ping',
-        handler: async (request, h) => {
-            return {
-                ok: true
-            }
-        }
-    })
+        handler: async (request, h) => ({ ok: true })
+    });
     server.route({
         method: 'GET',
         path: '/items',
-        handler: async (request, h) => {
-            return await getAllItems();
-        }
-    })
+        handler: ItemController.getAllItems
+    });
     server.route({
         method: 'GET',
         path: '/items/{id}',
-        handler: async (request, h) => {
-            const { id } = request.params;
-            const item = await getItemById(id);
-            if (!item) {
-                return h.response({ error: 'Item not found' }).code(404);
-            }
-            return h.response(item).code(200);
-        }
-    })
+        handler: ItemController.getItem
+    });
     server.route({
         method: 'POST',
         path: '/items',
-        handler: async (request, h) => {
-            // Custom error handling.
-            const name = request.payload["name"];
-            if (!name) {
-                return h.response().code(400);
-            }
-            const errors: ErrorStructure[] = []
-            const price = request.payload["price"];
-            if (!price) {
-                errors.push({
-                    field: "price",
-                    message: "Field \"price\" is required"
-                });
-            }
-            if (price < 0) {
-                errors.push({
-                    field: "price",
-                    message: "Field \"price\" cannot be negative"
-                });
-            }
-            if (errors.length) {
-                return h.response({errors: errors}).code(400);
-            }
-            // Safe parsing.
-            const parseResult = ItemSchema.safeParse(request.payload);
-            if (!parseResult.success) {
-                return h.response({ errors: parseResult.error.errors }).code(400);
-            }
-            const item: Item = {
-                id: createItemId(),
-                name: parseResult.data.name,
-                price: parseResult.data.price
-            };
-            await insertItem(item);
-            return h.response(item).code(201);
-        }
-    })
+        handler: ItemController.createItem
+    });
     server.route({
         method: 'PUT',
         path: '/items/{id}',
-        handler: async (request, h) => {
-            const { id } = request.params;
-            const existingItem = await getItemById(id);
-            if (!existingItem) {
-                return h.response({ error: 'Item not found' }).code(404);
-            }
-            // Custom error handling.
-            const price = request.payload["price"];
-            const errors: ErrorStructure[] = []
-            if (!price) {
-                errors.push({
-                    field: "price",
-                    message: "Field \"price\" is required"
-                });
-            }
-            if (price < 0) {
-                errors.push({
-                    field: "price",
-                    message: "Field \"price\" cannot be negative"
-                });
-            }
-            if (errors.length) {
-                return h.response({errors: errors}).code(400);
-            }
-            // Safe parsing.
-            const parseResult = ItemSchema.safeParse(request.payload);
-            if (!parseResult.success) {
-                return h.response({ errors: parseResult.error.errors }).code(400);
-            }
-            const updatedItem = await updateItemById(id, parseResult.data);
-            return h.response(updatedItem).code(200);
-        }
-    })
+        handler: ItemController.updateItem
+    });
     server.route({
         method: 'DELETE',
         path: '/items/{id}',
-        handler: async (request, h) => {
-            const { id } = request.params;
-            const deletedItem = await deleteItemById(id);
-            return h.response(deletedItem!).code(204);
-        }
-    })
-}
+        handler: ItemController.deleteItem
+    });
+};

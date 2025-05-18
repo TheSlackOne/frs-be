@@ -2,3 +2,4 @@ node_modules
 mock.ts
 .env
 generated/
+prisma/migrations/
