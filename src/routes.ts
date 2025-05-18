@@ -3,6 +3,7 @@ import { createItemId } from "./utils"
 import * as dotenv from 'dotenv';
 import { PrismaClient } from '../generated/prisma';
 import { Item, ErrorStructure } from './models'
+import { ItemSchema } from '../schemas/item.schema';
 
 const prisma = new PrismaClient();
 dotenv.config();
@@ -95,7 +96,6 @@ async function deleteItemById(id: number): Promise<Item | undefined> {
 async function getAllItems(): Promise<Array<Item>>{
     try {
         const queryResult = await prisma.products.findMany();
-        console.log("queryResult:", queryResult);
         return queryResult.map((row) => ({
             id: row.id,
             name: row.name,
@@ -142,6 +142,7 @@ export const defineRoutes = (server: Server) => {
         method: 'POST',
         path: '/items',
         handler: async (request, h) => {
+            // Custom error handling.
             const name = request.payload["name"];
             if (!name) {
                 return h.response().code(400);
@@ -163,10 +164,15 @@ export const defineRoutes = (server: Server) => {
             if (errors.length) {
                 return h.response({errors: errors}).code(400);
             }
-            const item = {
+            // Safe parsing.
+            const parseResult = ItemSchema.safeParse(request.payload);
+            if (!parseResult.success) {
+                return h.response({ errors: parseResult.error.errors }).code(400);
+            }
+            const item: Item = {
                 id: createItemId(),
-                name: name,
-                price: Number(price)
+                name: parseResult.data.name,
+                price: parseResult.data.price
             };
             await insertItem(item);
             return h.response(item).code(201);
@@ -177,10 +183,11 @@ export const defineRoutes = (server: Server) => {
         path: '/items/{id}',
         handler: async (request, h) => {
             const { id } = request.params;
-            const item = await getItemById(id);
-            if (!item) {
+            const existingItem = await getItemById(id);
+            if (!existingItem) {
                 return h.response({ error: 'Item not found' }).code(404);
             }
+            // Custom error handling.
             const price = request.payload["price"];
             const errors: ErrorStructure[] = []
             if (!price) {
@@ -198,7 +205,12 @@ export const defineRoutes = (server: Server) => {
             if (errors.length) {
                 return h.response({errors: errors}).code(400);
             }
-            const updatedItem = await updateItemById(id, request.payload as Partial<Item>);
+            // Safe parsing.
+            const parseResult = ItemSchema.safeParse(request.payload);
+            if (!parseResult.success) {
+                return h.response({ errors: parseResult.error.errors }).code(400);
+            }
+            const updatedItem = await updateItemById(id, parseResult.data);
             return h.response(updatedItem).code(200);
         }
     })
