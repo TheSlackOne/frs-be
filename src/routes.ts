@@ -1,32 +1,11 @@
 import { Server } from "@hapi/hapi"
 import { createItemId } from "./utils"
 import * as dotenv from 'dotenv';
-import { Pool } from "pg";
 import { PrismaClient } from '../generated/prisma';
+import { Item, ErrorStructure } from './models'
 
 const prisma = new PrismaClient();
 dotenv.config();
-
-// Database. Move to its own file
-const pool = new Pool({
-    user:  process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-});
-
-// Item model.
-interface Item {
-    id: number,
-    name: string,
-    price: number
-}
-
-interface ErrorStructure {
-    field: String,
-    message: String
-}
 
 async function insertItem(item: Item): Promise<Item | undefined> {
     try {
