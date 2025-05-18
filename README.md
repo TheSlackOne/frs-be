@@ -6,6 +6,11 @@ This project uses Make as task administrator.
 make install
 ```
 
+# Run Database
+```bash
+make setup-db
+```
+
 # Setup Database
 ```bash
 make setup-db
