@@ -26,11 +26,7 @@ interface ErrorStructure {
     message: String
 }
 
-// ToDo: In-memory database. Replace by a persistent database.
-let inMemoryDb: Array<Item> = []
-
 async function insertItem(item: Item): Promise<Item | undefined> {
-    inMemoryDb.push(item);
     const query = `INSERT INTO products (id, name, price)
         VALUES ($1, $2, $3) RETURNING *;`;
     const values = [item.id, item.name, item.price];
@@ -46,9 +42,6 @@ async function insertItem(item: Item): Promise<Item | undefined> {
 }
 
 async function getItemById(id: number): Promise<Item | undefined> {
-    // console.log("find id:", id);
-    const itemM = inMemoryDb.find(item => item.id === Number(id));
-    // console.log("itemM id:", itemM?.id);
     const query = `SELECT * FROM products WHERE id = $1`;
     try {
         const result = await pool.query(query, [id]);
@@ -60,7 +53,6 @@ async function getItemById(id: number): Promise<Item | undefined> {
             name: result.rows[0].name,
             price: Number(result.rows[0].price)
         };
-        // console.log("db item id:", item.id);
         return item;
     } catch (err) {
         console.error("DB select error:", err);
@@ -69,41 +61,63 @@ async function getItemById(id: number): Promise<Item | undefined> {
 }
 
 async function updateItemById(id: number, updatedData: Partial<Item>): Promise<Item | undefined> {
-    const itemIndex = inMemoryDb.findIndex(item => item.id === Number(id));
-    if (itemIndex === -1) {
-        return;
-    }
-    inMemoryDb[itemIndex] = {
-        ...inMemoryDb[itemIndex],
-        ...updatedData
-    };
-    // Persist update.
     const query = `UPDATE products SET name = $1, price = $2 WHERE id = $3 RETURNING *;`;
-    const values = [inMemoryDb[itemIndex].name, inMemoryDb[itemIndex].price, id];
+    const values = [updatedData.name, updatedData.price, id];
     try {
-        await pool.query(query, values);
+        const result = await pool.query(query, values);
+        if (result.rows.length === 0) {
+            return undefined;
+        }
+        const item: Item = {
+            id: result.rows[0].id,
+            name: result.rows[0].name,
+            price: Number(result.rows[0].price)
+        };
+        return item;
     } catch (err) {
         console.error("DB update error:", err);
+        return undefined;
     }
-    return inMemoryDb[itemIndex];
 }
 
-async function deleteItemById(id: number) {
-    const itemIndex = inMemoryDb.findIndex(item => item.id === Number(id));
-    if (itemIndex === -1) {
-        return null;
-    }
-    const [deletedItem] = inMemoryDb.splice(itemIndex, 1);
-    // Persist delete.
+async function deleteItemById(id: number): Promise<Item | undefined> {
     const query = `DELETE FROM products WHERE id = $1 RETURNING *;`;
     const values = [id];
     try {
-        await pool.query(query, values);
+        const result = await pool.query(query, values);
+        if (result.rows.length === 0) {
+            return undefined;
+        }
+        const item: Item = {
+            id: result.rows[0].id,
+            name: result.rows[0].name,
+            price: Number(result.rows[0].price)
+        };
+        return item;
     }
     catch (err) {
         console.error("DB delete error:", err);
+        return undefined
     }
-    return deletedItem;
+}
+
+async function getAllItems(): Promise<Array<Item>>{
+    const query = `SELECT * FROM products`;
+    try {
+        const result = await pool.query(query);
+        if (result.rows.length === 0) {
+            return [];
+        }
+        const items: Array<Item> = result.rows.map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            price: Number(row.price)
+        }));
+        return items;
+    } catch (err) {
+        console.error("DB select error:", err);
+        return [];
+    }
 }
 
 // Schemas can be implemented, like Zod.
@@ -122,7 +136,7 @@ export const defineRoutes = (server: Server) => {
         method: 'GET',
         path: '/items',
         handler: async (request, h) => {
-            return inMemoryDb;
+            return await getAllItems();
         }
     })
     server.route({
